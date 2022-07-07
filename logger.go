@@ -1,4 +1,4 @@
-package github.com/rroy233/logger
+package logger
 
 import (
 	"io"
