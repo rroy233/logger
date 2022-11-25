@@ -1,79 +1,192 @@
 package logger
 
 import (
+	"bytes"
+	"encoding/json"
+	"github.com/sirupsen/logrus"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"time"
 )
 
 var (
-	Debug *log.Logger
-	Info *log.Logger
-	Error *log.Logger
-	FATAL *log.Logger
+	Debug *logType
+	Info  *logType
+	Error *logType
+	FATAL *logType
 )
+
+type logType struct {
+	Level logrus.Level
+}
+
+type Config struct {
+	StdOutput      bool
+	StoreLocalFile bool
+	StoreRemote    bool
+	RemoteConfig   RemoteConfigStruct
+}
+
+type reportPayload struct {
+	Time int64  `json:"time"`
+	Data string `json:"data"`
+}
+
+type RemoteConfigStruct struct {
+	RequestUrl string
+	QueryKey   string
+}
 
 var nextDate string
 var nowDate string
 var nextDateUnix int64
 var waitTime time.Duration
 
+var sysLogger *logrus.Logger
 var logFile *os.File
+var config *Config
+var remoteBuffer *buffer
 
+const remoteReporterNum = 3
 
 // New 主程序启动时需要调用这个函数来初始化
-func New()  {
+func New(cf *Config) {
+	config = cf
 	nextDate = ""
 	nextDateUnix = 0
-
-	setNewLogger()
-	go watcher()
+	initLogger()
+	if config.StoreLocalFile {
+		go localFileRenameWorker()
+	}
+	if config.StoreRemote {
+		for i := 0; i < remoteReporterNum; i++ {
+			go remoteReporter()
+		}
+	}
+	return
 }
 
-// watcher 用于在后台运行的日志监控进程
-func watcher(){
-	for{
-		if nextDate == "" || time.Now().Unix()>= nextDateUnix { //初次运行或已经过了下个日期
+func remoteReporter() {
+	for true {
+		out := remoteBuffer.GetOne()
+		data := new(reportPayload)
+		data.Time = time.Now().Unix()
+		data.Data = out
+		payloadBytes, err := json.Marshal(data)
+		if err != nil {
+			log.Println("[remoteReporter]json格式化失败：", err)
+			continue
+		}
+		body := bytes.NewReader(payloadBytes)
+
+		req, err := http.NewRequest("POST", config.RemoteConfig.RequestUrl+config.RemoteConfig.QueryKey, body)
+		if err != nil {
+			log.Println("[remoteReporter]NewRequest失败：", err)
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			log.Println("[remoteReporter]http.DefaultClient.Do失败：", err)
+			continue
+		}
+		resp.Body.Close()
+	}
+}
+
+// localFileRenameWorker 用于在后台运行的日志监控进程
+func localFileRenameWorker() {
+	for {
+		if nextDate == "" || time.Now().Unix() >= nextDateUnix { //初次运行或已经过了下个日期
 			t := time.Now()
 
 			tm1 := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 5, 0, t.Location())
-			tm2 := tm1.AddDate(0, 0, 1)//次日凌晨
+			tm2 := tm1.AddDate(0, 0, 1) //次日凌晨
 
 			nextDate = tm2.Format("2006-01-02")
 			nextDateUnix = tm2.Unix()
 
 			waitTime = time.Until(tm2)
 
-			Debug.Println("[系统服务][日志监控进程]"+"已确定下一个苏醒时间")
+			Debug.Println("[系统服务][日志监控进程]" + "已确定下一个苏醒时间")
 
-			time.Sleep(waitTime)//睡眠直至第二天凌晨醒来
+			time.Sleep(waitTime) //睡眠直至第二天凌晨醒来
 		}
 		_ = logFile.Close()
-		setNewLogger()
+		initLogger()
 	}
 }
 
-// setNewLogger 开启新的日志记录线程
-func setNewLogger(){
-
-	nowDate = getTodayDateString()
+// initLogger 开启新的日志记录线程
+func initLogger() {
 	var err error
 
-	//日志输出文件
-	logFile, err = os.OpenFile("./log/"+nowDate+".log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalln("Faild to open error logger file:", err)
+	if config.StoreLocalFile {
+		nowDate = getTodayDateString()
+		//日志输出文件
+		_, err = os.Stat("./log/")
+		if err != nil {
+			if os.IsNotExist(err) {
+				os.Mkdir("./log/", 0755)
+				log.Fatalln("file dir auto created! ")
+			}
+		}
+		logFile, err = os.OpenFile("./log/"+nowDate+".log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			log.Fatalln("Faild to open error logger file:", err)
+		}
 	}
 
-	//重新定义
-	Debug = log.New(io.MultiWriter(os.Stderr), "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
-	Info = log.New(io.MultiWriter(logFile,os.Stderr), "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-	Error = log.New(io.MultiWriter(logFile, os.Stderr), "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
-	FATAL = log.New(io.MultiWriter(logFile, os.Stderr), "FATAL: ", log.Ldate|log.Ltime|log.Lshortfile)
+	//syslogger
+	sysLogger = logrus.New()
+	sysLogger.SetReportCaller(true)
+	sysLogger.Formatter = &logrus.JSONFormatter{}
+	sysLogger.Level = logrus.DebugLevel
+
+	//初始化remoteWriter
+	if config.StoreRemote {
+		remoteBuffer = NewBuffer()
+	}
+
+	//计算输出方式
+	index := 0
+	if config.StdOutput {
+		index += 1
+	}
+	if config.StoreLocalFile {
+		index += 2
+	}
+	if config.StoreRemote {
+		index += 4
+	}
+	switch index {
+	case 1:
+		sysLogger.SetOutput(os.Stdout)
+	case 2:
+		sysLogger.SetOutput(logFile)
+	case 4:
+		sysLogger.SetOutput(remoteBuffer)
+	case 3:
+		sysLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+	case 5:
+		sysLogger.SetOutput(io.MultiWriter(os.Stdout, remoteBuffer))
+	case 6:
+		sysLogger.SetOutput(io.MultiWriter(remoteBuffer, logFile))
+	case 7:
+		sysLogger.SetOutput(io.MultiWriter(os.Stdout, logFile, remoteBuffer))
+	}
+
+	//子logger
+	Debug = &logType{Level: logrus.DebugLevel}
+	Info = &logType{Level: logrus.InfoLevel}
+	Error = &logType{Level: logrus.ErrorLevel}
+	FATAL = &logType{Level: logrus.FatalLevel}
+	return
 }
 
-//getTodayDateString 获取今日日期string
+// getTodayDateString 获取今日日期string
 func getTodayDateString() string {
 	return time.Now().Format("2006-01-02")
 }
