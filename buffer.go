@@ -1,13 +1,8 @@
 package logger
 
-import (
-	"sync"
-)
-
-const MaxBufferSize = 10
+const MaxBufferSize = 20
 
 type buffer struct {
-	lock sync.Mutex
 	data chan string
 }
 
@@ -23,8 +18,6 @@ func (b *buffer) Write(p []byte) (int, error) {
 }
 
 func (b *buffer) GetOne() string {
-	b.lock.Lock()
 	data := <-b.data
-	b.lock.Unlock()
 	return data
 }

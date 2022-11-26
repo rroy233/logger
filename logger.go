@@ -29,9 +29,14 @@ type Config struct {
 	RemoteConfig   RemoteConfigStruct
 }
 
-type reportPayload struct {
+type remoteReportReq struct {
 	Time int64  `json:"time"`
 	Data string `json:"data"`
+}
+
+type remoteReportResp struct {
+	Status int    `json:"status"`
+	Msg    string `json:"msg"`
 }
 
 type RemoteConfigStruct struct {
@@ -71,7 +76,7 @@ func New(cf *Config) {
 func remoteReporter() {
 	for true {
 		out := remoteBuffer.GetOne()
-		data := new(reportPayload)
+		data := new(remoteReportReq)
 		data.Time = time.Now().Unix()
 		data.Data = out
 		payloadBytes, err := json.Marshal(data)
@@ -92,7 +97,23 @@ func remoteReporter() {
 			log.Println("[remoteReporter]http.DefaultClient.Do失败：", err)
 			continue
 		}
+
+		respData, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Println("[remoteReporter]Read body失败：", err)
+			continue
+		}
 		resp.Body.Close()
+		res := new(remoteReportResp)
+		err = json.Unmarshal(respData, res)
+		if err != nil {
+			log.Println("[remoteReporter]body json解析失败：", err)
+			continue
+		}
+		if res.Status != 0 { //汇报失败，准备重发
+			log.Println("[remoteReporter]远端返回错误：", res.Msg)
+			_, _ = remoteBuffer.Write([]byte(out + "\n"))
+		}
 	}
 }
 
