@@ -42,7 +42,16 @@ type remoteReportResp struct {
 type RemoteConfigStruct struct {
 	RequestUrl string
 	QueryKey   string
+
+	//RemoteReporterNum 远程报告协程数，默认为3
+	RemoteReporterNum int
 }
+
+const (
+	logRemoteErrNotAuth         = -1001
+	logRemoteErrParamsInvalid   = -1002
+	logRemoteErrDataParseFailed = -1003
+)
 
 var nextDate string
 var nowDate string
@@ -54,7 +63,7 @@ var logFile *os.File
 var config *Config
 var remoteBuffer *buffer
 
-const remoteReporterNum = 3
+var remoteReporterNum int
 
 // New 主程序启动时需要调用这个函数来初始化
 func New(cf *Config) {
@@ -66,6 +75,11 @@ func New(cf *Config) {
 		go localFileRenameWorker()
 	}
 	if config.StoreRemote {
+		if config.RemoteConfig.RemoteReporterNum == 0 {
+			remoteReporterNum = 3
+		} else {
+			remoteReporterNum = config.RemoteConfig.RemoteReporterNum
+		}
 		for i := 0; i < remoteReporterNum; i++ {
 			go remoteReporter()
 		}
@@ -111,8 +125,12 @@ func remoteReporter() {
 			continue
 		}
 		if res.Status != 0 { //汇报失败，准备重发
+			if res.Status == logRemoteErrNotAuth { //客户端验证失败
+				log.Fatalln("[remoteReporter]远端验证失败：", res.Msg)
+			}
 			log.Println("[remoteReporter]远端返回错误：", res.Msg)
 			_, _ = remoteBuffer.Write([]byte(out + "\n"))
+			time.Sleep(5 * time.Second)
 		}
 	}
 }
@@ -162,7 +180,7 @@ func initLogger() {
 
 	//syslogger
 	sysLogger = logrus.New()
-	sysLogger.SetReportCaller(true)
+
 	sysLogger.Formatter = &logrus.JSONFormatter{}
 	sysLogger.Level = logrus.DebugLevel
 

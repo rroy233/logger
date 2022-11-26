@@ -1,44 +1,59 @@
 package logger
 
-import "github.com/sirupsen/logrus"
+import (
+	"fmt"
+	"github.com/sirupsen/logrus"
+	"runtime"
+)
 
 func (lt *logType) Println(args ...interface{}) {
+	subLogger := makeSubLogger()
 	switch lt.Level {
 	case logrus.InfoLevel:
-		sysLogger.Infoln(args...)
+		subLogger.Infoln(args...)
 	case logrus.DebugLevel:
-		sysLogger.Debugln(args...)
+		subLogger.Debugln(args...)
 	case logrus.ErrorLevel:
-		sysLogger.Errorln(args...)
+		subLogger.Errorln(args...)
 	case logrus.FatalLevel:
-		sysLogger.Fatalln(args...)
+		subLogger.Fatalln(args...)
 	}
 }
 func (lt *logType) Printf(format string, args ...interface{}) {
+	subLogger := makeSubLogger()
 	switch lt.Level {
 	case logrus.InfoLevel:
-		sysLogger.Printf(format, args...)
+		subLogger.Printf(format, args...)
 	case logrus.DebugLevel:
-		sysLogger.Debugf(format, args...)
+		subLogger.Debugf(format, args...)
 	case logrus.ErrorLevel:
-		sysLogger.Errorf(format, args...)
+		subLogger.Errorf(format, args...)
 	case logrus.FatalLevel:
-		sysLogger.Fatalf(format, args...)
+		subLogger.Fatalf(format, args...)
 	}
 }
 func (lt *logType) Fatalln(args ...interface{}) {
+	subLogger := makeSubLogger()
 	switch lt.Level {
 	case logrus.ErrorLevel:
-		sysLogger.Fatalln(args...)
+		subLogger.Fatalln(args...)
 	case logrus.FatalLevel:
-		sysLogger.Fatalln(args...)
+		subLogger.Fatalln(args...)
 	}
 }
 func (lt *logType) Fatalf(format string, args ...interface{}) {
+	subLogger := makeSubLogger()
 	switch lt.Level {
 	case logrus.ErrorLevel:
-		sysLogger.Fatalf(format, args...)
+		subLogger.Fatalf(format, args...)
 	case logrus.FatalLevel:
-		sysLogger.Fatalf(format, args...)
+		subLogger.Fatalf(format, args...)
 	}
+}
+
+func makeSubLogger() *logrus.Entry {
+	ptr, file, line, _ := runtime.Caller(2)
+	return sysLogger.WithFields(logrus.Fields{
+		"Caller": fmt.Sprintf("%s:%d(%v)", file, line, ptr),
+	})
 }
