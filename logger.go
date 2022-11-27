@@ -111,6 +111,12 @@ func remoteReporter() {
 			log.Println("[remoteReporter]http.DefaultClient.Do失败：", err)
 			continue
 		}
+		if resp.StatusCode != 200 { //非200，重发
+			log.Println("[remoteReporter]远端http错误：", resp)
+			_, _ = remoteBuffer.Write([]byte(out + "\n"))
+			time.Sleep(5 * time.Second)
+			continue
+		}
 
 		respData, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -149,7 +155,7 @@ func localFileRenameWorker() {
 
 			waitTime = time.Until(tm2)
 
-			Debug.Println("[系统服务][日志监控进程]" + "已确定下一个苏醒时间")
+			log.Println("[系统服务][日志监控进程]" + "已确定下一个苏醒时间")
 
 			time.Sleep(waitTime) //睡眠直至第二天凌晨醒来
 		}
@@ -169,7 +175,7 @@ func initLogger() {
 		if err != nil {
 			if os.IsNotExist(err) {
 				os.Mkdir("./log/", 0755)
-				log.Fatalln("file dir auto created! ")
+				log.Println("file dir auto created! ")
 			}
 		}
 		logFile, err = os.OpenFile("./log/"+nowDate+".log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
