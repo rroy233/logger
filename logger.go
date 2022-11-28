@@ -57,6 +57,7 @@ var nextDate string
 var nowDate string
 var nextDateUnix int64
 var waitTime time.Duration
+var firstRun bool
 
 var sysLogger *logrus.Logger
 var logFile *os.File
@@ -70,10 +71,17 @@ func New(cf *Config) {
 	config = cf
 	nextDate = ""
 	nextDateUnix = 0
+	firstRun = true
+
+	//初始化
 	initLogger()
+
+	//启动本地日志文件自动命名协程
 	if config.StoreLocalFile {
 		go localFileRenameWorker()
 	}
+
+	//启动远程汇报协程
 	if config.StoreRemote {
 		if config.RemoteConfig.RemoteReporterNum == 0 {
 			remoteReporterNum = 3
@@ -106,7 +114,10 @@ func remoteReporter() {
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
-		resp, err := http.DefaultClient.Do(req)
+		httpClient := http.Client{
+			Timeout: 3 * time.Second,
+		}
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			log.Println("[remoteReporter]http.DefaultClient.Do失败：", err)
 			continue
@@ -191,8 +202,9 @@ func initLogger() {
 	sysLogger.Level = logrus.DebugLevel
 
 	//初始化remoteWriter
-	if config.StoreRemote {
+	if config.StoreRemote && firstRun == true {
 		remoteBuffer = NewBuffer()
+		firstRun = false
 	}
 
 	//计算输出方式
