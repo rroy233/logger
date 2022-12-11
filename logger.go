@@ -3,11 +3,14 @@ package logger
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/rroy233/logger/targz"
 	"github.com/sirupsen/logrus"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 )
 
@@ -182,12 +185,9 @@ func initLogger() {
 	if config.StoreLocalFile {
 		nowDate = getTodayDateString()
 		//日志输出文件
-		_, err = os.Stat("./log/")
-		if err != nil {
-			if os.IsNotExist(err) {
-				os.Mkdir("./log/", 0755)
-				log.Println("file dir auto created! ")
-			}
+		if isExist("./log/") == false {
+			os.Mkdir("./log/", 0755)
+			log.Println("file dir auto created! ")
 		}
 		logFile, err = os.OpenFile("./log/"+nowDate+".log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
@@ -240,10 +240,57 @@ func initLogger() {
 	Info = &logType{Level: logrus.InfoLevel}
 	Error = &logType{Level: logrus.ErrorLevel}
 	FATAL = &logType{Level: logrus.FatalLevel}
+
+	//整理归档历史日志
+	archiveOldFile()
+
 	return
 }
 
 // getTodayDateString 获取今日日期string
 func getTodayDateString() string {
 	return time.Now().Format("2006-01-02")
+}
+
+func archiveOldFile() {
+	if config.StoreLocalFile == false {
+		return
+	}
+
+	//扫描log文件夹
+	dir, err := os.ReadDir("./log")
+	if err != nil {
+		log.Fatalln("[archiveOldFile] ReadDir:", err)
+	}
+
+	//检查archive文件夹
+	if isExist("./log/archives/") == false {
+		os.Mkdir("./log/archives/", 0755)
+		log.Println("archives dir auto created! ")
+	}
+
+	for _, entry := range dir {
+		if entry.IsDir() {
+			continue
+		}
+		//处理logger创建的日志
+		if regexp.MustCompile(`\d{4}-\d{2}-\d{2}.log`).Match([]byte(entry.Name())) && entry.Name() != getTodayDateString()+".log" {
+			err = targz.Create(fmt.Sprintf("./log/%s", entry.Name()), fmt.Sprintf("./log/archives/%s.tar.gz", entry.Name()))
+			if err != nil {
+				log.Println("[archiveOldFile] targz.Create:", err)
+			}
+			_ = os.Remove(fmt.Sprintf("./log/%s", entry.Name()))
+		}
+	}
+	return
+}
+
+func isExist(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
 }
