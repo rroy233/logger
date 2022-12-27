@@ -30,6 +30,7 @@ type Config struct {
 	StoreLocalFile bool
 	StoreRemote    bool
 	RemoteConfig   RemoteConfigStruct
+	NotUseJson     bool
 }
 
 type remoteReportReq struct {
@@ -62,7 +63,8 @@ var nextDateUnix int64
 var waitTime time.Duration
 var firstRun bool
 
-var sysLogger *logrus.Logger
+var jsonLogger *logrus.Logger
+var defaultLogger *logrus.Logger
 var logFile *os.File
 var config *Config
 var remoteBuffer *buffer
@@ -195,11 +197,12 @@ func initLogger() {
 		}
 	}
 
-	//syslogger
-	sysLogger = logrus.New()
+	jsonLogger = logrus.New()
+	jsonLogger.Formatter = &logrus.JSONFormatter{}
+	jsonLogger.Level = logrus.DebugLevel
 
-	sysLogger.Formatter = &logrus.JSONFormatter{}
-	sysLogger.Level = logrus.DebugLevel
+	defaultLogger = logrus.New()
+	defaultLogger.Formatter = &logrus.TextFormatter{}
 
 	//初始化remoteWriter
 	if config.StoreRemote && firstRun == true {
@@ -220,19 +223,56 @@ func initLogger() {
 	}
 	switch index {
 	case 1:
-		sysLogger.SetOutput(os.Stdout)
+		if config.NotUseJson {
+			defaultLogger.SetOutput(os.Stdout)
+			jsonLogger.SetOutput(io.Discard)
+		} else {
+			defaultLogger.SetOutput(io.Discard)
+			jsonLogger.SetOutput(os.Stdout)
+		}
 	case 2:
-		sysLogger.SetOutput(logFile)
+		if config.NotUseJson {
+			defaultLogger.SetOutput(logFile)
+			jsonLogger.SetOutput(io.Discard)
+		} else {
+			defaultLogger.SetOutput(io.Discard)
+			jsonLogger.SetOutput(logFile)
+		}
 	case 4:
-		sysLogger.SetOutput(remoteBuffer)
+		defaultLogger.SetOutput(io.Discard)
+		jsonLogger.SetOutput(remoteBuffer)
 	case 3:
-		sysLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+		if config.NotUseJson {
+			defaultLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+			jsonLogger.SetOutput(io.Discard)
+		} else {
+			defaultLogger.SetOutput(io.Discard)
+			jsonLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+		}
 	case 5:
-		sysLogger.SetOutput(io.MultiWriter(os.Stdout, remoteBuffer))
+		if config.NotUseJson {
+			defaultLogger.SetOutput(os.Stdout)
+			jsonLogger.SetOutput(remoteBuffer)
+		} else {
+			defaultLogger.SetOutput(io.Discard)
+			jsonLogger.SetOutput(io.MultiWriter(os.Stdout, remoteBuffer))
+		}
 	case 6:
-		sysLogger.SetOutput(io.MultiWriter(remoteBuffer, logFile))
+		if config.NotUseJson {
+			defaultLogger.SetOutput(logFile)
+			jsonLogger.SetOutput(remoteBuffer)
+		} else {
+			defaultLogger.SetOutput(io.Discard)
+			jsonLogger.SetOutput(io.MultiWriter(remoteBuffer, logFile))
+		}
 	case 7:
-		sysLogger.SetOutput(io.MultiWriter(os.Stdout, logFile, remoteBuffer))
+		if config.NotUseJson {
+			defaultLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+			jsonLogger.SetOutput(remoteBuffer)
+		} else {
+			defaultLogger.SetOutput(io.Discard)
+			jsonLogger.SetOutput(io.MultiWriter(os.Stdout, logFile, remoteBuffer))
+		}
 	}
 
 	//子logger
