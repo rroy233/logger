@@ -26,6 +26,9 @@ type logType struct {
 	Level logrus.Level
 }
 
+type defaultFormatter struct {
+}
+
 type Config struct {
 	StdOutput      bool
 	StoreLocalFile bool
@@ -203,7 +206,7 @@ func initLogger() {
 	jsonLogger.Level = logrus.DebugLevel
 
 	defaultLogger = logrus.New()
-	defaultLogger.Formatter = &logrus.TextFormatter{}
+	defaultLogger.SetFormatter(new(defaultFormatter))
 
 	//初始化remoteWriter
 	if config.StoreRemote && firstRun == true {

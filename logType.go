@@ -70,7 +70,7 @@ func (lt *logType) Fatalf(format string, args ...interface{}) {
 }
 
 func makeSubLoggerDefault() *logrus.Entry {
-	ptr, file, line, _ := runtime.Caller(2)
+	_, file, line, _ := runtime.Caller(2)
 	pwd, _ := os.Getwd()
 	rel, err := filepath.Rel(pwd, file)
 	if err != nil {
@@ -80,12 +80,12 @@ func makeSubLoggerDefault() *logrus.Entry {
 	}
 
 	return defaultLogger.WithFields(logrus.Fields{
-		"Caller": fmt.Sprintf("%s:%d(%v)", rel, line, ptr),
+		"Caller": fmt.Sprintf("%s:%d", rel, line),
 	})
 }
 
 func makeSubLoggerJson() *logrus.Entry {
-	ptr, file, line, _ := runtime.Caller(2)
+	_, file, line, _ := runtime.Caller(2)
 	pwd, _ := os.Getwd()
 	rel, err := filepath.Rel(pwd, file)
 	if err != nil {
@@ -93,8 +93,8 @@ func makeSubLoggerJson() *logrus.Entry {
 	} else {
 		rel = "./" + rel
 	}
-	
+
 	return jsonLogger.WithFields(logrus.Fields{
-		"Caller": fmt.Sprintf("%s:%d(%v)", rel, line, ptr),
+		"Caller": fmt.Sprintf("%s:%d", rel, line),
 	})
 }
