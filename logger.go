@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -309,6 +310,61 @@ func archiveOldFile() {
 		log.Println("archives dir auto created! ")
 	}
 
+	//检查gin.log文件是否存在(后续进行日志分割)
+	if isExist("./log/gin.log") == true && getFileSize("./log/gin.log") > 0 {
+		if isExist("./log/gin-archives/") == false {
+			os.Mkdir("./log/gin-archives/", 0755)
+			log.Println("gin-archives dir auto created! ")
+		}
+
+		fd, err := os.OpenFile("./log/gin.log", os.O_RDWR, 0755)
+		if err != nil {
+			log.Fatalln("open gin.log failed:", err)
+		}
+		defer fd.Close()
+
+		todayFileName := fmt.Sprintf("./log/%s-gin.log", time.Now().Format("2006-01-02"))
+		if isExist(todayFileName) == false {
+			err = os.WriteFile(todayFileName, nil, 0755)
+			if err != nil {
+				log.Fatalln("create gin.today.log failed:", err)
+			}
+		}
+		todayFd, err := os.OpenFile(todayFileName, os.O_APPEND|os.O_WRONLY, 0755)
+		if err != nil {
+			log.Fatalln("open gin.today.log failed:", err)
+		}
+		defer todayFd.Close()
+
+		writer := bufio.NewWriter(todayFd)
+		reader := bufio.NewReader(fd)
+		for true {
+			buf := make([]byte, 2048)
+			n, err := reader.Read(buf)
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+			}
+			n, err = writer.Write(buf[:n])
+			if err != nil {
+				log.Fatalln("writer.Write error:", err)
+			}
+		}
+		_, _ = writer.Write([]byte("\n"))
+		err = writer.Flush()
+		if err != nil {
+			log.Fatalln("writer.Flush error:", err)
+		}
+
+		//gin.log归零
+		err = os.Truncate("./log/gin.log", 0)
+		if err != nil {
+			log.Fatalln("gin log Truncate failed:", err)
+		}
+	}
+
+	//压缩
 	for _, entry := range dir {
 		if entry.IsDir() {
 			continue
@@ -321,7 +377,16 @@ func archiveOldFile() {
 			}
 			_ = os.Remove(fmt.Sprintf("./log/%s", entry.Name()))
 		}
+		//处理gin创建的日志
+		if regexp.MustCompile(`\d{4}-\d{2}-\d{2}-gin.log`).Match([]byte(entry.Name())) && entry.Name() != getTodayDateString()+"-gin.log" {
+			err = targz.Create(fmt.Sprintf("./log/%s", entry.Name()), fmt.Sprintf("./log/gin-archives/%s.tar.gz", entry.Name()))
+			if err != nil {
+				log.Println("[archiveOldFile] targz.Create:", err)
+			}
+			_ = os.Remove(fmt.Sprintf("./log/%s", entry.Name()))
+		}
 	}
+
 	return
 }
 
@@ -333,4 +398,12 @@ func isExist(path string) bool {
 		}
 	}
 	return true
+}
+
+func getFileSize(path string) int64 {
+	fileStat, err := os.Stat(path)
+	if err != nil {
+		return -1
+	}
+	return fileStat.Size()
 }
