@@ -18,6 +18,9 @@ func (lt *logType) Println(args ...interface{}) {
 	case logrus.DebugLevel:
 		subLoggerDefault.Debugln(args...)
 		subLoggerJson.Debugln(args...)
+	case logrus.WarnLevel:
+		subLoggerDefault.Warnln(args...)
+		subLoggerJson.Warnln(args...)
 	case logrus.ErrorLevel:
 		subLoggerDefault.Errorln(args...)
 		subLoggerJson.Errorln(args...)
@@ -36,6 +39,9 @@ func (lt *logType) Printf(format string, args ...interface{}) {
 	case logrus.DebugLevel:
 		subLoggerDefault.Debugf(format, args...)
 		subLoggerJson.Debugf(format, args...)
+	case logrus.WarnLevel:
+		subLoggerDefault.Warnf(format, args...)
+		subLoggerJson.Warnf(format, args...)
 	case logrus.ErrorLevel:
 		subLoggerDefault.Errorf(format, args...)
 		subLoggerJson.Errorf(format, args...)

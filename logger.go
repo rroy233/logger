@@ -18,6 +18,7 @@ import (
 var (
 	Debug *logType
 	Info  *logType
+	Warn  *logType
 	Error *logType
 	FATAL *logType
 )
@@ -207,6 +208,7 @@ func initLogger() {
 
 	defaultLogger = logrus.New()
 	defaultLogger.SetFormatter(new(defaultFormatter))
+	defaultLogger.Level = logrus.DebugLevel
 
 	//初始化remoteWriter
 	if config.StoreRemote && firstRun == true {
@@ -282,6 +284,7 @@ func initLogger() {
 	//子logger
 	Debug = &logType{Level: logrus.DebugLevel}
 	Info = &logType{Level: logrus.InfoLevel}
+	Warn = &logType{Level: logrus.WarnLevel}
 	Error = &logType{Level: logrus.ErrorLevel}
 	FATAL = &logType{Level: logrus.FatalLevel}
 
