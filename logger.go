@@ -326,20 +326,20 @@ func archiveOldFile() {
 		}
 		defer fd.Close()
 
-		todayFileName := fmt.Sprintf("./log/%s-gin.log", time.Now().Format("2006-01-02"))
-		if isExist(todayFileName) == false {
-			err = os.WriteFile(todayFileName, nil, 0755)
+		yesterdayFileName := fmt.Sprintf("./log/%s-gin.log", time.Now().Add(-1*time.Hour).Format("2006-01-02"))
+		if isExist(yesterdayFileName) == false {
+			err = os.WriteFile(yesterdayFileName, nil, 0755)
 			if err != nil {
 				log.Fatalln("create gin.today.log failed:", err)
 			}
 		}
-		todayFd, err := os.OpenFile(todayFileName, os.O_APPEND|os.O_WRONLY, 0755)
+		yestertodayFd, err := os.OpenFile(yesterdayFileName, os.O_APPEND|os.O_WRONLY, 0755)
 		if err != nil {
 			log.Fatalln("open gin.today.log failed:", err)
 		}
-		defer todayFd.Close()
+		defer yestertodayFd.Close()
 
-		writer := bufio.NewWriter(todayFd)
+		writer := bufio.NewWriter(yestertodayFd)
 		reader := bufio.NewReader(fd)
 		for true {
 			buf := make([]byte, 2048)
