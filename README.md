@@ -94,9 +94,9 @@ type remoteReportResp struct {
 
 //Status状态码
 const (
-  logRemoteSuccess            = 0//成功
+	logRemoteSuccess            = 0//成功
 	logRemoteErrNotAuth         = -1001//验证失败
-  logRemoteErrParamsInvalid   = -1002//参数无效
+	logRemoteErrParamsInvalid   = -1002//参数无效
 	logRemoteErrDataParseFailed = -1003//数据解析失败
 )
 ```
