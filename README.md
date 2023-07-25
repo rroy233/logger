@@ -18,7 +18,7 @@
 1. 引用本项目
 
    ```shell
-   go get -u github.com/rroy233/logger
+   go get -u github.com/rroy233/logger/v2
    ```
 
 2. 初始化
