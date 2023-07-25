@@ -31,12 +31,36 @@ type defaultFormatter struct {
 }
 
 type Config struct {
-	StdOutput      bool
+	//是否输出到终端
+	StdOutput bool
+
+	//是否输出到日志文件
 	StoreLocalFile bool
-	StoreRemote    bool
-	RemoteConfig   RemoteConfigStruct
-	NotUseJson     bool
+
+	//是否启用远程汇报
+	StoreRemote bool
+
+	//远程汇报配置
+	RemoteConfig RemoteConfigStruct
+
+	//使用json格式
+	UseJson bool
+
+	//配置额外需要归档的日志文件
+	//
+	//归档操作会将文件当前内容复制到归档文件夹"/log/{name}-archives/"中按日期存档，并清空当前文件。
+	ExtraArchive []ArchiveConfig
 }
+
+type ArchiveConfig struct {
+	//日志名称
+	Name string
+
+	//日志文件位置
+	File string
+}
+
+var GinLog = ArchiveConfig{"gin", "./log/gin.log"}
 
 type remoteReportReq struct {
 	Time int64  `json:"time"`
@@ -229,55 +253,55 @@ func initLogger() {
 	}
 	switch index {
 	case 1:
-		if config.NotUseJson {
-			defaultLogger.SetOutput(os.Stdout)
-			jsonLogger.SetOutput(io.Discard)
-		} else {
+		if config.UseJson {
 			defaultLogger.SetOutput(io.Discard)
 			jsonLogger.SetOutput(os.Stdout)
+		} else {
+			defaultLogger.SetOutput(os.Stdout)
+			jsonLogger.SetOutput(io.Discard)
 		}
 	case 2:
-		if config.NotUseJson {
-			defaultLogger.SetOutput(logFile)
-			jsonLogger.SetOutput(io.Discard)
-		} else {
+		if config.UseJson {
 			defaultLogger.SetOutput(io.Discard)
 			jsonLogger.SetOutput(logFile)
+		} else {
+			defaultLogger.SetOutput(logFile)
+			jsonLogger.SetOutput(io.Discard)
 		}
 	case 4:
 		defaultLogger.SetOutput(io.Discard)
 		jsonLogger.SetOutput(remoteBuffer)
 	case 3:
-		if config.NotUseJson {
-			defaultLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
-			jsonLogger.SetOutput(io.Discard)
-		} else {
+		if config.UseJson {
 			defaultLogger.SetOutput(io.Discard)
 			jsonLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+		} else {
+			defaultLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+			jsonLogger.SetOutput(io.Discard)
 		}
 	case 5:
-		if config.NotUseJson {
-			defaultLogger.SetOutput(os.Stdout)
-			jsonLogger.SetOutput(remoteBuffer)
-		} else {
+		if config.UseJson {
 			defaultLogger.SetOutput(io.Discard)
 			jsonLogger.SetOutput(io.MultiWriter(os.Stdout, remoteBuffer))
+		} else {
+			defaultLogger.SetOutput(os.Stdout)
+			jsonLogger.SetOutput(remoteBuffer)
 		}
 	case 6:
-		if config.NotUseJson {
-			defaultLogger.SetOutput(logFile)
-			jsonLogger.SetOutput(remoteBuffer)
-		} else {
+		if config.UseJson {
 			defaultLogger.SetOutput(io.Discard)
 			jsonLogger.SetOutput(io.MultiWriter(remoteBuffer, logFile))
+		} else {
+			defaultLogger.SetOutput(logFile)
+			jsonLogger.SetOutput(remoteBuffer)
 		}
 	case 7:
-		if config.NotUseJson {
-			defaultLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
-			jsonLogger.SetOutput(remoteBuffer)
-		} else {
+		if config.UseJson {
 			defaultLogger.SetOutput(io.Discard)
 			jsonLogger.SetOutput(io.MultiWriter(os.Stdout, logFile, remoteBuffer))
+		} else {
+			defaultLogger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+			jsonLogger.SetOutput(remoteBuffer)
 		}
 	}
 
@@ -316,57 +340,60 @@ func archiveOldFile() {
 		log.Println("archives dir auto created! ")
 	}
 
-	//检查gin.log文件是否存在(后续进行日志分割)
-	if isExist("./log/gin.log") == true && getFileSize("./log/gin.log") > 0 {
-		if isExist("./log/gin-archives/") == false {
-			os.Mkdir("./log/gin-archives/", 0755)
-			log.Println("gin-archives dir auto created! ")
-		}
-
-		fd, err := os.OpenFile("./log/gin.log", os.O_RDWR, 0755)
-		if err != nil {
-			log.Fatalln("open gin.log failed:", err)
-		}
-		defer fd.Close()
-
-		yesterdayFileName := fmt.Sprintf("./log/%s-gin.log", time.Now().Add(-1*time.Hour).Format("2006-01-02"))
-		if isExist(yesterdayFileName) == false {
-			err = os.WriteFile(yesterdayFileName, nil, 0755)
-			if err != nil {
-				log.Fatalln("create gin.today.log failed:", err)
+	//检查额外归档的日志文件是否存在(后续进行日志分割)
+	for _, archiveConfig := range config.ExtraArchive {
+		archiveDir := fmt.Sprintf("./log/%s-archives/", archiveConfig.Name)
+		if isExist(archiveConfig.File) == true && getFileSize(archiveConfig.File) > 0 {
+			if isExist(archiveDir) == false {
+				os.Mkdir(archiveDir, 0755)
+				log.Println(archiveDir + " dir auto created! ")
 			}
-		}
-		yestertodayFd, err := os.OpenFile(yesterdayFileName, os.O_APPEND|os.O_WRONLY, 0755)
-		if err != nil {
-			log.Fatalln("open gin.today.log failed:", err)
-		}
-		defer yestertodayFd.Close()
 
-		writer := bufio.NewWriter(yestertodayFd)
-		reader := bufio.NewReader(fd)
-		for true {
-			buf := make([]byte, 2048)
-			n, err := reader.Read(buf)
+			fd, err := os.OpenFile(archiveConfig.File, os.O_RDWR, 0755)
 			if err != nil {
-				if err == io.EOF {
-					break
+				log.Fatalln("open", archiveConfig.File, "failed:", err)
+			}
+			defer fd.Close()
+
+			yesterdayFileName := fmt.Sprintf("./log/%s-%s.log", time.Now().Add(-1*time.Hour).Format("2006-01-02"), archiveConfig.Name)
+			if isExist(yesterdayFileName) == false {
+				err = os.WriteFile(yesterdayFileName, nil, 0755)
+				if err != nil {
+					log.Fatalf("create %s.today.log failed:%s\n", archiveConfig.Name, err.Error())
 				}
 			}
-			n, err = writer.Write(buf[:n])
+			yestertodayFd, err := os.OpenFile(yesterdayFileName, os.O_APPEND|os.O_WRONLY, 0755)
 			if err != nil {
-				log.Fatalln("writer.Write error:", err)
+				log.Fatalf("open %s.today.log failed:%s\n", archiveConfig.Name, err.Error())
 			}
-		}
-		_, _ = writer.Write([]byte("\n"))
-		err = writer.Flush()
-		if err != nil {
-			log.Fatalln("writer.Flush error:", err)
-		}
+			defer yestertodayFd.Close()
 
-		//gin.log归零
-		err = os.Truncate("./log/gin.log", 0)
-		if err != nil {
-			log.Fatalln("gin log Truncate failed:", err)
+			writer := bufio.NewWriter(yestertodayFd)
+			reader := bufio.NewReader(fd)
+			for true {
+				buf := make([]byte, 2048)
+				n, err := reader.Read(buf)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+				}
+				n, err = writer.Write(buf[:n])
+				if err != nil {
+					log.Fatalln("writer.Write error:", err)
+				}
+			}
+			_, _ = writer.Write([]byte("\n"))
+			err = writer.Flush()
+			if err != nil {
+				log.Fatalln("writer.Flush error:", err)
+			}
+
+			//归零
+			err = os.Truncate(archiveConfig.File, 0)
+			if err != nil {
+				log.Fatalf("%s log Truncate failed:%s\n", archiveConfig.Name, err.Error())
+			}
 		}
 	}
 
@@ -383,13 +410,15 @@ func archiveOldFile() {
 			}
 			_ = os.Remove(fmt.Sprintf("./log/%s", entry.Name()))
 		}
-		//处理gin创建的日志
-		if regexp.MustCompile(`\d{4}-\d{2}-\d{2}-gin.log`).Match([]byte(entry.Name())) && entry.Name() != getTodayDateString()+"-gin.log" {
-			err = targz.Create(fmt.Sprintf("./log/%s", entry.Name()), fmt.Sprintf("./log/gin-archives/%s.tar.gz", entry.Name()))
-			if err != nil {
-				log.Println("[archiveOldFile] targz.Create:", err)
+		//处理额外的日志
+		for _, archiveConfig := range config.ExtraArchive {
+			if regexp.MustCompile(`\d{4}-\d{2}-\d{2}-`+archiveConfig.Name+`.log`).Match([]byte(entry.Name())) && entry.Name() != getTodayDateString()+"-"+archiveConfig.Name+".log" {
+				err = targz.Create(fmt.Sprintf("./log/%s", entry.Name()), fmt.Sprintf("./log/%s-archives/%s.tar.gz", archiveConfig.Name, entry.Name()))
+				if err != nil {
+					log.Println("[archiveOldFile] targz.Create:", err)
+				}
+				_ = os.Remove(fmt.Sprintf("./log/%s", entry.Name()))
 			}
-			_ = os.Remove(fmt.Sprintf("./log/%s", entry.Name()))
 		}
 	}
 

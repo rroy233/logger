@@ -9,7 +9,7 @@
 - [x] 多种输出方式(终端/文件)
 - [x] 远程上报(需自行设计接收端)
 - [x] 日志文件压缩归档
-- [x] 对[gin](https://github.com/gin-gonic/gin)访问日志进行压缩归档
+- [x] 对其他访问日志(如[gin](https://github.com/gin-gonic/gin))进行压缩归档
 
 
 
@@ -34,7 +34,11 @@
        RequestUrl: "http://127.0.0.1/api/logUpload",//汇报接收端的URL
        QueryKey:   "?key=xxx",//用于接收端的验证
      },//远程上报配置
-     NotUseJson: true,//不使用json格式
+     UseJson: true,//使用json格式
+     ExtraArchive: []ArchiveConfig{
+	   {Name: "gin", File: "./log/gin.log"},
+       {Name: "db", File: "./log/db.log"},
+     },//额外需要归档的日志
    })
    ```
 
