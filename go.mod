@@ -1,4 +1,4 @@
-module github.com/rroy233/logger
+module github.com/rroy233/logger/v2
 
 go 1.18
 
