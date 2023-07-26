@@ -1,6 +1,6 @@
-module github.com/rroy233/logger/v2
+module gopkg.in/rroy233/logger.v2
 
-go 1.18
+go 1.20
 
 require (
 	github.com/sirupsen/logrus v1.9.0 // indirect

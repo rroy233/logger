@@ -18,13 +18,12 @@
 1. 引用本项目
 
    ```shell
-   go get -u github.com/rroy233/logger/v2
+   go get -u gopkg.in/rroy233/logger.v2
    ```
 
 2. 初始化
 
    ```go
-   import "github.com/rroy233/logger"
    //...
    logger.New(&logger.Config{
      StdOutput:      true,//是否输出到std_out
